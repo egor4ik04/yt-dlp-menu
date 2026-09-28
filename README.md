@@ -1,2 +1,6 @@
 # yt-dlp-menu
 created with ai code to automate yt-dlp lib with ready templates to download yt videos with thumbnails/subs/audio formats
+
+запускать через yt_menu файлы, обновлять/устанавливать библиотеки через setup
+
+.bat для win, .sh для linux
