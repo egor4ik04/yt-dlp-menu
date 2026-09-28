@@ -225,13 +225,45 @@ choose_thumb_format() {
     esac
 }
 
+
+choose_quality() {
+    echo ""
+    echo "Качество видео:"
+    echo "1) Максимальное доступное"
+    echo "2) До 2160p (4K)"
+    echo "3) До 1440p (2K)"
+    echo "4) До 1080p (Full HD)"
+    echo "5) До 720p (HD)"
+    echo "6) До 480p"
+    echo "7) До 360p"
+    local q
+    read -rp "Выбери качество: " q
+    case "$q" in
+      1) QUALITY_FMT='bestvideo+bestaudio/best' ;;
+      2) QUALITY_FMT='bestvideo[height<=2160]+bestaudio/best[height<=2160]' ;;
+      3) QUALITY_FMT='bestvideo[height<=1440]+bestaudio/best[height<=1440]' ;;
+      4) QUALITY_FMT='bestvideo[height<=1080]+bestaudio/best[height<=1080]' ;;
+      5) QUALITY_FMT='bestvideo[height<=720]+bestaudio/best[height<=720]' ;;
+      6) QUALITY_FMT='bestvideo[height<=480]+bestaudio/best[height<=480]' ;;
+      7) QUALITY_FMT='bestvideo[height<=360]+bestaudio/best[height<=360]' ;;
+      *) echo "Неверный выбор"; return 1 ;;
+    esac
+}
+
+open_output() {
+    local folder="$1"
+    if command -v xdg-open >/dev/null 2>&1; then xdg-open "$ROOT/$folder" >/dev/null 2>&1 &
+    elif command -v gio >/dev/null 2>&1; then gio open "$ROOT/$folder" >/dev/null 2>&1 &
+    else echo "Папка результата: $ROOT/$folder"; fi
+}
+
 # ---- Функции скачивания (URL всегда последний аргумент) ---------------------
 # Используются и для одиночных ссылок, и для links.txt
 
 dl_best() {   # URL
     "$YTDLP" \
         --newline \
-        --ignore-errors \
+        -f "${QUALITY_FMT:-bestvideo+bestaudio/best}" \
         --add-metadata \
         -o "$OUT_VIDEO" \
         "$1"
@@ -239,7 +271,7 @@ dl_best() {   # URL
 
 dl_video() {   # CONTAINER URL
     local container="$1" url="$2"
-    local args=(--newline --ignore-errors -f "bestvideo+bestaudio/best")
+    local args=(--newline -f "${QUALITY_FMT:-bestvideo+bestaudio/best}")
     [[ -n "$container" ]] && args+=(--merge-output-format "$container")
     args+=(--add-metadata -o "$OUT_VIDEO" "$url")
     "$YTDLP" "${args[@]}"
@@ -250,8 +282,7 @@ dl_audio() {   # FORMAT URL
     if [[ -n "$fmt" ]]; then
         "$YTDLP" \
             --newline \
-            --ignore-errors \
-            -x \
+                -x \
             --audio-format "$fmt" \
             --audio-quality 0 \
             --add-metadata \
@@ -261,8 +292,7 @@ dl_audio() {   # FORMAT URL
     else
         "$YTDLP" \
             --newline \
-            --ignore-errors \
-            -f "bestaudio/best" \
+                -f "bestaudio/best" \
             --add-metadata \
             -o "$OUT_AUDIO" \
             "$url"
@@ -271,7 +301,7 @@ dl_audio() {   # FORMAT URL
 
 dl_thumb() {   # FORMAT URL
     local fmt="$1" url="$2"
-    local args=(--newline --ignore-errors --skip-download --write-thumbnail)
+    local args=(--newline --skip-download --write-thumbnail)
     [[ -n "$fmt" ]] && args+=(--convert-thumbnails "$fmt")
     args+=(-o "$OUT_THUMB" "$url")
     "$YTDLP" "${args[@]}"
@@ -280,7 +310,6 @@ dl_thumb() {   # FORMAT URL
 dl_subs() {   # FLAG(--write-subs|--write-auto-subs) LANGS SUBFORMAT URL
     "$YTDLP" \
         --newline \
-        --ignore-errors \
         --skip-download \
         "$1" \
         --sub-langs "$2" \
@@ -291,7 +320,7 @@ dl_subs() {   # FLAG(--write-subs|--write-auto-subs) LANGS SUBFORMAT URL
 
 dl_video_subs() {   # FLAG LANGS SUBFORMAT CONTAINER URL
     local flag="$1" langs="$2" subfmt="$3" container="$4" url="$5"
-    local args=(--newline --ignore-errors -f "bestvideo+bestaudio/best")
+    local args=(--newline -f "${QUALITY_FMT:-bestvideo+bestaudio/best}")
     [[ -n "$container" ]] && args+=(--merge-output-format "$container")
     args+=("$flag" --sub-langs "$langs" --sub-format "$subfmt" --embed-subs --add-metadata -o "$OUT_VIDEO" "$url")
     "$YTDLP" "${args[@]}"
@@ -316,22 +345,24 @@ for_each_link() {
 mode_best() {
     ensure_dirs
     get_url || return
+    choose_quality || return
     clear
-    echo "Скачивание: лучшее доступное качество"
+    echo "Скачивание: выбранное качество"
     echo
-    dl_best "$URL"
+    dl_best "$URL" && open_output downloads/video
     pause
 }
 
 mode_mp4() {
     ensure_dirs
     get_url || return
+    choose_quality || return
     choose_video_container || return
     clear
     echo "Скачивание: лучшее видео/аудио"
     if [[ -n "$VIDFMT" ]]; then echo "Контейнер: $VIDFMT"; else echo "Контейнер: как есть"; fi
     echo
-    dl_video "$VIDFMT" "$URL"
+    dl_video "$VIDFMT" "$URL" && open_output downloads/video
     pause
 }
 
@@ -343,7 +374,7 @@ mode_mp3() {
     echo "Скачивание: аудио"
     if [[ -n "$AUDFMT" ]]; then echo "Формат: $AUDFMT"; else echo "Формат: как есть"; fi
     echo
-    dl_audio "$AUDFMT" "$URL"
+    dl_audio "$AUDFMT" "$URL" && open_output downloads/audio
     pause
 }
 
@@ -355,7 +386,7 @@ mode_thumb() {
     echo "Скачивание: только превью"
     if [[ -n "$THUMBFMT" ]]; then echo "Формат: $THUMBFMT"; else echo "Формат: как есть"; fi
     echo
-    dl_thumb "$THUMBFMT" "$URL"
+    dl_thumb "$THUMBFMT" "$URL" && open_output downloads/thumbs
     pause
 }
 
@@ -387,7 +418,7 @@ mode_subs() {
     echo "Языки: $SUBLANGS"
     echo "Формат: $SUBFMT"
     echo
-    dl_subs --write-subs "$SUBLANGS" "$SUBFMT" "$URL"
+    dl_subs --write-subs "$SUBLANGS" "$SUBFMT" "$URL" && open_output downloads/subs
     pause
 }
 
@@ -401,7 +432,7 @@ mode_auto_subs() {
     echo "Языки: $SUBLANGS"
     echo "Формат: $SUBFMT"
     echo
-    dl_subs --write-auto-subs "$SUBLANGS" "$SUBFMT" "$URL"
+    dl_subs --write-auto-subs "$SUBLANGS" "$SUBFMT" "$URL" && open_output downloads/subs
     pause
 }
 
@@ -410,6 +441,7 @@ mode_video_subs() {
     get_url || return
     choose_sub_langs || return
     choose_sub_format || return
+    choose_quality || return
     choose_video_container || return
     clear
     echo "Скачивание: видео + обычные субтитры"
@@ -417,7 +449,7 @@ mode_video_subs() {
     echo "Формат субтитров: $SUBFMT"
     if [[ -n "$VIDFMT" ]]; then echo "Контейнер видео: $VIDFMT"; else echo "Контейнер видео: как есть"; fi
     echo
-    dl_video_subs --write-subs "$SUBLANGS" "$SUBFMT" "$VIDFMT" "$URL"
+    dl_video_subs --write-subs "$SUBLANGS" "$SUBFMT" "$VIDFMT" "$URL" && open_output downloads/video
     pause
 }
 
@@ -426,6 +458,7 @@ mode_video_auto_subs() {
     get_url || return
     choose_sub_langs || return
     choose_sub_format || return
+    choose_quality || return
     choose_video_container || return
     clear
     echo "Скачивание: видео + автоматические субтитры"
@@ -433,7 +466,7 @@ mode_video_auto_subs() {
     echo "Формат субтитров: $SUBFMT"
     if [[ -n "$VIDFMT" ]]; then echo "Контейнер видео: $VIDFMT"; else echo "Контейнер видео: как есть"; fi
     echo
-    dl_video_subs --write-auto-subs "$SUBLANGS" "$SUBFMT" "$VIDFMT" "$URL"
+    dl_video_subs --write-auto-subs "$SUBLANGS" "$SUBFMT" "$VIDFMT" "$URL" && open_output downloads/video
     pause
 }
 
@@ -474,8 +507,14 @@ batch_menu() {
     read -rp "Выбери режим для links.txt: " bmode
 
     case "$bmode" in
-        1) for_each_link dl_best ;;
-        2) for_each_link dl_video mp4 ;;
+        1)
+            choose_quality || return
+            for_each_link dl_best
+            ;;
+        2)
+            choose_quality || return
+            for_each_link dl_video mp4
+            ;;
         3) for_each_link dl_audio mp3 ;;
         4) for_each_link dl_thumb jpg ;;
         5)
@@ -493,6 +532,7 @@ batch_menu() {
             ;;
     esac
 
+    case "$bmode" in 1|2) open_output downloads/video ;; 3) open_output downloads/audio ;; 4) open_output downloads/thumbs ;; 5|6) open_output downloads/subs ;; esac
     pause
 }
 
@@ -500,8 +540,10 @@ open_downloads() {
     ensure_dirs
     if command -v xdg-open >/dev/null 2>&1; then
         xdg-open "$ROOT/downloads" >/dev/null 2>&1 &
+    elif command -v gio >/dev/null 2>&1; then
+        gio open "$ROOT/downloads" >/dev/null 2>&1 &
     else
-        echo "xdg-open не найден. Папка загрузок: $ROOT/downloads"
+        echo "Не найден xdg-open или gio. Папка загрузок: $ROOT/downloads"
         pause
     fi
 }

@@ -74,10 +74,9 @@ set "URL="
 set /p URL=Вставь ссылку: 
 if not defined URL (
     echo Ссылка пустая
-    pause
-    goto main
+    exit /b 1
 )
-exit /b
+exit /b 0
 
 :ensure_dirs
 if not exist "downloads" mkdir "downloads"
@@ -241,25 +240,59 @@ if not defined THUMBCHOICE (
 )
 exit /b
 
+
+:choose_quality
+cls
+echo ===============================
+echo       КАЧЕСТВО ВИДЕО
+echo ===============================
+echo 1^) Максимальное доступное
+echo 2^) До 2160p (4K)
+echo 3^) До 1440p (2K)
+echo 4^) До 1080p (Full HD)
+echo 5^) До 720p (HD)
+echo 6^) До 480p
+echo 7^) До 360p
+echo 0^) Назад
+set "QUALITYFMT="
+set /p QCHOICE=Выбери качество: 
+if "%QCHOICE%"=="1" set "QUALITYFMT=bestvideo+bestaudio/best"
+if "%QCHOICE%"=="2" set "QUALITYFMT=bestvideo[height<=2160]+bestaudio/best[height<=2160]"
+if "%QCHOICE%"=="3" set "QUALITYFMT=bestvideo[height<=1440]+bestaudio/best[height<=1440]"
+if "%QCHOICE%"=="4" set "QUALITYFMT=bestvideo[height<=1080]+bestaudio/best[height<=1080]"
+if "%QCHOICE%"=="5" set "QUALITYFMT=bestvideo[height<=720]+bestaudio/best[height<=720]"
+if "%QCHOICE%"=="6" set "QUALITYFMT=bestvideo[height<=480]+bestaudio/best[height<=480]"
+if "%QCHOICE%"=="7" set "QUALITYFMT=bestvideo[height<=360]+bestaudio/best[height<=360]"
+if "%QCHOICE%"=="0" exit /b 1
+if not defined QUALITYFMT (echo Неверный выбор&pause&exit /b 1)
+exit /b
+
 :mode_best
 call :ensure_dirs
 call :get_url
+if errorlevel 1 goto main
+call :choose_quality
+if errorlevel 1 goto main
 cls
 echo Скачивание: лучшее доступное качество
 echo.
 yt-dlp.exe ^
 --newline ^
---ignore-errors ^
+-f "%QUALITYFMT%" ^
 --add-metadata ^
 -o "downloads\video\%%(title)s [%%(id)s].%%(ext)s" ^
 "%URL%"
 echo.
+start "" "%~dp0downloads\video"
 pause
 goto main
 
 :mode_mp4
 call :ensure_dirs
 call :get_url
+if errorlevel 1 goto main
+call :choose_quality
+if errorlevel 1 goto main
 call :choose_video_container
 cls
 echo Скачивание: лучшее видео/аудио
@@ -270,8 +303,7 @@ echo.
 if defined VIDFMT (
     yt-dlp.exe ^
     --newline ^
-    --ignore-errors ^
-    -f "bestvideo+bestaudio/best" ^
+        -f "%QUALITYFMT%" ^
     --merge-output-format %VIDFMT% ^
     --add-metadata ^
     -o "downloads\video\%%(title)s [%%(id)s].%%(ext)s" ^
@@ -279,20 +311,21 @@ if defined VIDFMT (
 ) else (
     yt-dlp.exe ^
     --newline ^
-    --ignore-errors ^
-    -f "bestvideo+bestaudio/best" ^
+        -f "%QUALITYFMT%" ^
     --add-metadata ^
     -o "downloads\video\%%(title)s [%%(id)s].%%(ext)s" ^
     "%URL%"
 )
 
 echo.
+start "" "%~dp0downloads\video"
 pause
 goto main
 
 :mode_mp3
 call :ensure_dirs
 call :get_url
+if errorlevel 1 goto main
 call :choose_audio_format
 cls
 echo Скачивание: аудио
@@ -303,8 +336,7 @@ echo.
 if defined AUDFMT (
     yt-dlp.exe ^
     --newline ^
-    --ignore-errors ^
-    -x ^
+        -x ^
     --audio-format %AUDFMT% ^
     --audio-quality 0 ^
     --add-metadata ^
@@ -314,20 +346,21 @@ if defined AUDFMT (
 ) else (
     yt-dlp.exe ^
     --newline ^
-    --ignore-errors ^
-    -f "bestaudio/best" ^
+        -f "bestaudio/best" ^
     --add-metadata ^
     -o "downloads\audio\%%(title)s [%%(id)s].%%(ext)s" ^
     "%URL%"
 )
 
 echo.
+start "" "%~dp0downloads\audio"
 pause
 goto main
 
 :mode_thumb
 call :ensure_dirs
 call :get_url
+if errorlevel 1 goto main
 call :choose_thumb_format
 cls
 echo Скачивание: только превью
@@ -338,8 +371,7 @@ echo.
 if defined THUMBFMT (
     yt-dlp.exe ^
     --newline ^
-    --ignore-errors ^
-    --skip-download ^
+        --skip-download ^
     --write-thumbnail ^
     --convert-thumbnails %THUMBFMT% ^
     -o "downloads\thumbs\%%(title)s [%%(id)s].%%(ext)s" ^
@@ -347,19 +379,20 @@ if defined THUMBFMT (
 ) else (
     yt-dlp.exe ^
     --newline ^
-    --ignore-errors ^
-    --skip-download ^
+        --skip-download ^
     --write-thumbnail ^
     -o "downloads\thumbs\%%(title)s [%%(id)s].%%(ext)s" ^
     "%URL%"
 )
 
 echo.
+start "" "%~dp0downloads\thumbs"
 pause
 goto main
 
 :mode_list_subs
 call :get_url
+if errorlevel 1 goto main
 cls
 echo Обычные субтитры:
 echo.
@@ -370,6 +403,7 @@ goto main
 
 :mode_list_auto_subs
 call :get_url
+if errorlevel 1 goto main
 cls
 echo Автоматические субтитры:
 echo.
@@ -381,6 +415,7 @@ goto main
 :mode_subs
 call :ensure_dirs
 call :get_url
+if errorlevel 1 goto main
 call :choose_sub_langs
 call :choose_sub_format
 cls
@@ -390,7 +425,6 @@ echo Формат: %SUBFMT%
 echo.
 yt-dlp.exe ^
 --newline ^
---ignore-errors ^
 --skip-download ^
 --write-subs ^
 --sub-langs "%SUBLANGS%" ^
@@ -398,12 +432,14 @@ yt-dlp.exe ^
 -o "downloads\subs\%%(title)s [%%(id)s].%%(ext)s" ^
 "%URL%"
 echo.
+start "" "%~dp0downloads\subs"
 pause
 goto main
 
 :mode_auto_subs
 call :ensure_dirs
 call :get_url
+if errorlevel 1 goto main
 call :choose_sub_langs
 call :choose_sub_format
 cls
@@ -413,7 +449,6 @@ echo Формат: %SUBFMT%
 echo.
 yt-dlp.exe ^
 --newline ^
---ignore-errors ^
 --skip-download ^
 --write-auto-subs ^
 --sub-langs "%SUBLANGS%" ^
@@ -421,12 +456,16 @@ yt-dlp.exe ^
 -o "downloads\subs\%%(title)s [%%(id)s].%%(ext)s" ^
 "%URL%"
 echo.
+start "" "%~dp0downloads\subs"
 pause
 goto main
 
 :mode_video_subs
 call :ensure_dirs
 call :get_url
+if errorlevel 1 goto main
+call :choose_quality
+if errorlevel 1 goto main
 call :choose_sub_langs
 call :choose_sub_format
 call :choose_video_container
@@ -441,8 +480,7 @@ echo.
 if defined VIDFMT (
     yt-dlp.exe ^
     --newline ^
-    --ignore-errors ^
-    -f "bestvideo+bestaudio/best" ^
+        -f "%QUALITYFMT%" ^
     --merge-output-format %VIDFMT% ^
     --write-subs ^
     --sub-langs "%SUBLANGS%" ^
@@ -454,8 +492,7 @@ if defined VIDFMT (
 ) else (
     yt-dlp.exe ^
     --newline ^
-    --ignore-errors ^
-    -f "bestvideo+bestaudio/best" ^
+        -f "%QUALITYFMT%" ^
     --write-subs ^
     --sub-langs "%SUBLANGS%" ^
     --sub-format "%SUBFMT%" ^
@@ -466,12 +503,16 @@ if defined VIDFMT (
 )
 
 echo.
+start "" "%~dp0downloads\video"
 pause
 goto main
 
 :mode_video_auto_subs
 call :ensure_dirs
 call :get_url
+if errorlevel 1 goto main
+call :choose_quality
+if errorlevel 1 goto main
 call :choose_sub_langs
 call :choose_sub_format
 call :choose_video_container
@@ -486,8 +527,7 @@ echo.
 if defined VIDFMT (
     yt-dlp.exe ^
     --newline ^
-    --ignore-errors ^
-    -f "bestvideo+bestaudio/best" ^
+        -f "%QUALITYFMT%" ^
     --merge-output-format %VIDFMT% ^
     --write-auto-subs ^
     --sub-langs "%SUBLANGS%" ^
@@ -499,8 +539,7 @@ if defined VIDFMT (
 ) else (
     yt-dlp.exe ^
     --newline ^
-    --ignore-errors ^
-    -f "bestvideo+bestaudio/best" ^
+        -f "%QUALITYFMT%" ^
     --write-auto-subs ^
     --sub-langs "%SUBLANGS%" ^
     --sub-format "%SUBFMT%" ^
@@ -511,11 +550,13 @@ if defined VIDFMT (
 )
 
 echo.
+start "" "%~dp0downloads\video"
 pause
 goto main
 
 :mode_formats
 call :get_url
+if errorlevel 1 goto main
 cls
 echo Доступные форматы:
 echo.
@@ -561,31 +602,35 @@ pause
 goto main
 
 :batch_best
+call :choose_quality
+if errorlevel 1 goto main
 for /f "usebackq delims=" %%i in ("%LINKS%") do (
     if not "%%~i"=="" (
         echo.
         echo ==== %%i ====
         yt-dlp.exe ^
         --newline ^
-        --ignore-errors ^
+        -f "%QUALITYFMT%" ^
         --add-metadata ^
         -o "downloads\video\%%(title)s [%%(id)s].%%(ext)s" ^
         "%%i"
     )
 )
 echo.
+start "" "%~dp0downloads\video"
 pause
 goto main
 
 :batch_mp4
+call :choose_quality
+if errorlevel 1 goto main
 for /f "usebackq delims=" %%i in ("%LINKS%") do (
     if not "%%~i"=="" (
         echo.
         echo ==== %%i ====
         yt-dlp.exe ^
         --newline ^
-        --ignore-errors ^
-        -f "bestvideo+bestaudio/best" ^
+                -f "%QUALITYFMT%" ^
         --merge-output-format mp4 ^
         --add-metadata ^
         -o "downloads\video\%%(title)s [%%(id)s].%%(ext)s" ^
@@ -593,6 +638,7 @@ for /f "usebackq delims=" %%i in ("%LINKS%") do (
     )
 )
 echo.
+start "" "%~dp0downloads\video"
 pause
 goto main
 
@@ -603,8 +649,7 @@ for /f "usebackq delims=" %%i in ("%LINKS%") do (
         echo ==== %%i ====
         yt-dlp.exe ^
         --newline ^
-        --ignore-errors ^
-        -x ^
+                -x ^
         --audio-format mp3 ^
         --audio-quality 0 ^
         --add-metadata ^
@@ -614,6 +659,7 @@ for /f "usebackq delims=" %%i in ("%LINKS%") do (
     )
 )
 echo.
+start "" "%~dp0downloads\audio"
 pause
 goto main
 
@@ -624,8 +670,7 @@ for /f "usebackq delims=" %%i in ("%LINKS%") do (
         echo ==== %%i ====
         yt-dlp.exe ^
         --newline ^
-        --ignore-errors ^
-        --skip-download ^
+                --skip-download ^
         --write-thumbnail ^
         --convert-thumbnails jpg ^
         -o "downloads\thumbs\%%(title)s [%%(id)s].%%(ext)s" ^
@@ -633,6 +678,7 @@ for /f "usebackq delims=" %%i in ("%LINKS%") do (
     )
 )
 echo.
+start "" "%~dp0downloads\thumbs"
 pause
 goto main
 
@@ -644,8 +690,7 @@ for /f "usebackq delims=" %%i in ("%LINKS%") do (
         echo ==== %%i ====
         yt-dlp.exe ^
         --newline ^
-        --ignore-errors ^
-        --skip-download ^
+                --skip-download ^
         --write-subs ^
         --sub-langs "%SUBLANGS%" ^
         --sub-format "best/srt/vtt" ^
@@ -654,6 +699,7 @@ for /f "usebackq delims=" %%i in ("%LINKS%") do (
     )
 )
 echo.
+start "" "%~dp0downloads\subs"
 pause
 goto main
 
@@ -665,8 +711,7 @@ for /f "usebackq delims=" %%i in ("%LINKS%") do (
         echo ==== %%i ====
         yt-dlp.exe ^
         --newline ^
-        --ignore-errors ^
-        --skip-download ^
+                --skip-download ^
         --write-auto-subs ^
         --sub-langs "%SUBLANGS%" ^
         --sub-format "best/srt/vtt" ^
@@ -675,6 +720,7 @@ for /f "usebackq delims=" %%i in ("%LINKS%") do (
     )
 )
 echo.
+start "" "%~dp0downloads\subs"
 pause
 goto main
 
