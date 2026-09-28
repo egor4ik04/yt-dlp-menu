@@ -5,3 +5,5 @@ downloads/video/
 
 tools/deno/
 tools/ffmpeg/
+
+*.ini
