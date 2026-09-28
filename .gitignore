@@ -1,0 +1,7 @@
+downloads/audio/
+downloads/subs/
+downloads/thumbs/
+downloads/video/
+
+tools/deno/
+tools/ffmpeg/
